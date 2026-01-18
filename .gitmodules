@@ -1,0 +1,6 @@
+[submodule "service"]
+	path = service
+	url = git@github.com:taaki2311/fire-alarm-service.git
+[submodule "website"]
+	path = website
+	url = git@github.com:taaki2311/fire-alarm-website.git

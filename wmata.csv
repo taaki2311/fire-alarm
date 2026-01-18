@@ -1,0 +1,99 @@
+,Red,Orange,Blue,Green,Yellow,Silver
+Addison Road-Seat Pleasant,false,false,true,false,false,true
+Anacostia,false,false,false,true,false,false
+Archives-Navy Memorial-Penn Quarter,false,false,false,true,true,false
+Arlington Cemetery,false,false,true,false,false,false
+Ashburn,false,false,false,false,false,true
+Ballston-MU,false,true,false,false,false,true
+Benning Road,false,false,true,false,false,true
+Bethesda,true,false,false,false,false,false
+Braddock Road,false,false,true,false,true,false
+Branch Ave,false,false,false,true,false,false
+Brookland-CUA,true,false,false,false,false,false
+Capitol Heights,false,false,true,false,false,true
+Capitol South,false,true,true,false,false,true
+Cheverly,false,true,false,false,false,false
+Clarendon,false,true,false,false,false,true
+Cleveland Park,true,false,false,false,false,false
+College Park-U of Md,false,false,false,true,false,false
+Columbia Heights,false,false,false,true,false,false
+Congress Heights,false,false,false,true,false,false
+Court House,false,true,false,false,false,true
+Crystal City,false,false,true,false,true,false
+Deanwood,false,true,false,false,false,false
+Downtown Largo,false,false,true,false,false,true
+Dunn Loring-Merrifield,false,true,false,false,false,false
+Dupont Circle,true,false,false,false,false,false
+East Falls Church,false,true,false,false,false,true
+Eastern Market,false,true,true,false,false,true
+Eisenhower Avenue,false,false,false,false,true,false
+Farragut North,true,false,false,false,false,false
+Farragut West,false,true,true,false,false,true
+Federal Center SW,false,true,true,false,false,true
+Federal Triangle,false,true,true,false,false,true
+Foggy Bottom-GWU,false,true,true,false,false,true
+Forest Glen,true,false,false,false,false,false
+Fort Totten,true,false,false,true,false,false
+Franconia-Springfield,false,false,true,false,false,false
+Friendship Heights,true,false,false,false,false,false
+Gallery Pl-Chinatown,true,false,false,true,true,false
+Georgia Ave-Petworth,false,false,false,true,false,false
+Glenmont,true,false,false,false,false,false
+Greenbelt,false,false,false,true,false,false
+Greensboro,false,false,false,false,false,true
+Grosvenor-Strathmore,true,false,false,false,false,false
+Herndon,false,false,false,false,false,true
+Huntington,false,false,false,false,true,false
+Hyattsville Crossing,false,false,false,true,false,false
+Innovation Center,false,false,false,false,false,true
+Judiciary Square,true,false,false,false,false,false
+King St-Old Town,false,false,true,false,true,false
+L'Enfant Plaza,false,true,true,true,true,true
+Landover,false,true,false,false,false,false
+Loudoun Gateway,false,false,false,false,false,true
+McLean,false,false,false,false,false,true
+McPherson Square,false,true,true,false,false,true
+Medical Center,true,false,false,false,false,false
+Metro Center,true,true,true,false,false,true
+Minnesota Ave,false,true,false,false,false,false
+Morgan Boulevard,false,false,true,false,false,true
+Mt Vernon Sq 7th St-Convention Center,false,false,false,true,true,false
+Navy Yard-Ballpark,false,false,false,true,false,false
+Naylor Road,false,false,false,true,false,false
+New Carrollton,false,true,false,false,false,false
+NoMa-Gallaudet U,true,false,false,false,false,false
+North Bethesda,true,false,false,false,false,false
+Pentagon,false,false,true,false,true,false
+Pentagon City,false,false,true,false,true,false
+Potomac Ave,false,true,true,false,false,true
+Potomac Yard,false,false,true,false,true,false
+Reston Town Center,false,false,false,false,false,true
+Rhode Island Ave-Brentwood,true,false,false,false,false,false
+Rockville,true,false,false,false,false,false
+Ronald Reagan Washington National Airport,false,false,true,false,true,false
+Rosslyn,false,true,true,false,false,true
+Shady Grove,true,false,false,false,false,false
+Shaw-Howard U,false,false,false,true,false,false
+Silver Spring,true,false,false,false,false,false
+Smithsonian,false,true,true,false,false,true
+Southern Avenue,false,false,false,true,false,false
+Spring Hill,false,false,false,false,false,true
+Stadium-Armory,false,true,true,false,false,true
+Suitland,false,false,false,true,false,false
+Takoma,true,false,false,false,false,false
+Tenleytown-AU,true,false,false,false,false,false
+Twinbrook,true,false,false,false,false,false
+Tysons,false,false,false,false,false,true
+U Street/African-Amer Civil War Memorial/Cardozo,false,false,false,true,false,false
+Union Station,true,false,false,false,false,false
+Van Dorn Street,false,false,true,false,false,false
+Van Ness-UDC,true,false,false,false,false,false
+Vienna/Fairfax-GMU,false,true,false,false,false,false
+Virginia Square-GMU,false,true,false,false,false,true
+Washington Dulles International Airport,false,false,false,false,false,true
+Waterfront,false,false,false,true,false,false
+West Falls Church,false,true,false,false,false,false
+West Hyattsville,false,false,false,true,false,false
+Wheaton,true,false,false,false,false,false
+Wiehle-Reston East,false,false,false,false,false,true
+Woodley Park-Zoo/Adams Morgan,true,false,false,false,false,false
