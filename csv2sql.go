@@ -1,16 +1,16 @@
 /*
 Csv2sql converts station information (name and any rail lines it is on) to SQL
 statements. Emitted SQL statements are designed to work with the tables defined
-in setup.sql. Besides the table definitations, the database should be empty
+in setup.sql. Besides the table definitions, the database should be empty
 (have no records in each table) since the emitted statements start indexing the
 primary keys at '1'. For an example input see wmata.csv.
 
 # WARNING! SQL INJECTION POSSIBILITY!
 
-DO NOT PIPE DIRECTLY TO SQL DATABASE! This is purely just a helper script whos
+DO NOT PIPE DIRECTLY TO SQL DATABASE! This is purely just a helper script whose
 out should be verified before passing it to your database. It does not do any
 checking for or protecting against SQL injection attacks. It is meant only to be
-run once to help set up your SQL database and should not be accessable to
+run once to help set up your SQL database and should not be accessible to
 end-users or anyone unauthorized to have direct access to your database. Do not
 come complaining to me if you get "Robert');DROP TABLE Students;--"ed. YOU HAVE
 BEEN WARNED!
@@ -71,6 +71,10 @@ import (
 	"strings"
 )
 
+// CSV is read in from Standard In (the actual file contents, not just the
+// filepath) and the generated SQL statements are printed to Standard Out. This
+// is done to simplify the program with a "flow-through" design that works well
+// with UNIX pipes.
 func main() {
 	// Creates a writer to Standard Out and writes "BEGIN;" to start a SQL
 	// transaction: https://www.geeksforgeeks.org/sql/sql-transactions/

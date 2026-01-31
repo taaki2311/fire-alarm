@@ -1,10 +1,22 @@
 #!/bin/sh
 set -e
 
-DATABASE=temp.sqlite
+DATABASE=$(mktemp)
+echo "Created temporary file: $DATABASE"
 
-sqlite3 $DATABASE < setup.sql
-sea-orm-cli generate entity --output-dir ./service/src/database --with-prelude all-allow-unused-imports --database-url sqlite://$DATABASE?mode=ro
-sea-orm-cli generate entity --output-dir ./website/src/database --with-prelude all-allow-unused-imports --database-url sqlite://$DATABASE?mode=ro
-rm $DATABASE
-printf "1985-04-12T23:20:50.52Z" > ./service/timestamp.txt
+sqlite3 "$DATABASE" < setup.sql
+echo "Creating tables in database"
+
+for DIRECTORY in service website; do
+    sea-orm-cli generate entity \
+        --output-dir ./$DIRECTORY/src/database \
+        --with-prelude all-allow-unused-imports \
+        --database-url sqlite://"$DATABASE"?mode=ro
+done
+
+rm "$DATABASE"
+echo "Deleting temporary file"
+
+TIMESTAMP=./service/timestamp.txt
+printf "1985-04-12T23:20:50.52Z" > $TIMESTAMP
+echo "Writing dummy timestamp to $TIMESTAMP"
