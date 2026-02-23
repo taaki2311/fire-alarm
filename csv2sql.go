@@ -8,7 +8,7 @@ primary keys at '1'. For an example input see wmata.csv.
 # WARNING! SQL INJECTION POSSIBILITY!
 
 DO NOT PIPE DIRECTLY TO SQL DATABASE! This is purely just a helper script whose
-out should be verified before passing it to your database. It does not do any
+output should be verified before passing it to your database. It does not do any
 checking for or protecting against SQL injection attacks. It is meant only to be
 run once to help set up your SQL database and should not be accessible to
 end-users or anyone unauthorized to have direct access to your database. Do not
@@ -17,7 +17,7 @@ BEEN WARNED!
 
 # Usage
 
-	cat <input.csv> | csv2sql > <output.sql>
+	csv2sql < input.csv > output.sql
 
 # Example
 
@@ -34,10 +34,10 @@ BEEN WARNED!
 		INSERT INTO RailLine VALUES (3, 'Blue');
 		INSERT INTO Station VALUES (1, 'Foo');
 		INSERT INTO Station VALUES (2, 'Bar');
-		INSERT INTO LineStation VALUES (2, 1);
-		INSERT INTO LineStation VALUES (2, 3);
-		INSERT INTO Station VALUES (3, 'Baz');
+		INSERT INTO LineStation VALUES (1, 2);
 		INSERT INTO LineStation VALUES (3, 2);
+		INSERT INTO Station VALUES (3, 'Baz');
+		INSERT INTO LineStation VALUES (2, 3);
 		COMMIT;
 
 # CSV Format
@@ -81,18 +81,14 @@ func main() {
 	writer := bufio.NewWriter(os.Stdout)
 	_, err := fmt.Fprintln(writer, "BEGIN;")
 	if nil != err {
-		rollback(writer)
-		forceFlush(writer)
-		log.Fatal("Failed to write 'BEGIN;': ", err)
+		rollbackFlushLog(writer, "Failed to write 'BEGIN;': %v", err)
 	}
 
 	// Creates the CSV reader from Standard In and reads in the header.
 	reader := csv.NewReader(os.Stdin)
 	header, err := reader.Read()
 	if nil != err {
-		rollback(writer)
-		forceFlush(writer)
-		log.Fatal("Failed to read CSV header: ", err)
+		rollbackFlushLog(writer, "Failed to read CSV header: %v", err)
 	}
 
 	// Check to make sure there is at least one rail line in the network.
@@ -100,9 +96,7 @@ func main() {
 	// the first column is the station name (does not need to have a title).
 	recordLen := len(header)
 	if 2 > recordLen {
-		rollback(writer)
-		forceFlush(writer)
-		log.Fatal("Network must have at least one rail line")
+		rollbackFlushLog(writer, "Network must have at least one rail line")
 	}
 
 	// Creates the records for each rail line. Starts primary id at 1
@@ -110,16 +104,12 @@ func main() {
 		// Check if line name is empty
 		nameLen := len(lineName)
 		if 0 >= nameLen {
-			rollback(writer)
-			forceFlush(writer)
-			log.Fatalf("Invalid name length for line %d: %d", lineId, nameLen)
+			rollbackFlushLog(writer, "Invalid name length for line %d: %d", lineId, nameLen)
 		}
 
 		_, err = fmt.Fprintf(writer, "INSERT INTO RailLine VALUES (%d, '%s');\n", lineId+1, escapeSql(lineName))
 		if nil != err {
-			rollback(writer)
-			forceFlush(writer)
-			log.Fatal("Failed to write line insert statement: ", err)
+			rollbackFlushLog(writer, "Failed to write line insert statement: %v", err)
 		}
 	}
 
@@ -127,25 +117,19 @@ func main() {
 	// Keep looping and reading from the CSV from Standard In until you get a EOF
 	for record, err := reader.Read(); err != io.EOF; record, err = reader.Read() {
 		if nil != err {
-			rollback(writer)
-			forceFlush(writer)
-			log.Fatalf("Failed to read record for station %d: %v", stationId, err)
+			rollbackFlushLog(writer, "Failed to read record for station %d: %v", stationId, err)
 		}
 
 		// Check if station name is empty
 		nameLen := len(record[0])
 		if 0 >= nameLen {
-			rollback(writer)
-			forceFlush(writer)
-			log.Fatalf("Invalid name length for station %d: %d", stationId, nameLen)
+			rollbackFlushLog(writer, "Invalid name length for station %d: %d", stationId, nameLen)
 		}
 
 		// Create the record for each station.
 		_, err = fmt.Fprintf(writer, "INSERT INTO Station VALUES (%d, '%s');\n", stationId, escapeSql(record[0]))
 		if nil != err {
-			rollback(writer)
-			forceFlush(writer)
-			log.Fatal("Failed to write station insert statement: ", err)
+			rollbackFlushLog(writer, "Failed to write station insert statement: %v", err)
 		}
 
 		for lineId, onLine := range record[1:] { // For every line...
@@ -156,11 +140,9 @@ func main() {
 				log.Fatalf("Failed to parse boolean value for %s, line %s: %v", record[0], header[lineId+1], err)
 			} else if isOnLine {
 				// Create a link between the station and the line
-				_, err = fmt.Fprintf(writer, "INSERT INTO LineStation VALUES (%d, %d);\n", stationId, lineId+1)
+				_, err = fmt.Fprintf(writer, "INSERT INTO LineStation VALUES (%d, %d);\n", lineId+1, stationId)
 				if nil != err {
-					rollback(writer)
-					forceFlush(writer)
-					log.Fatal("Failed to write link statement: ", err)
+					rollbackFlushLog(writer, "Failed to write link statement: %v", err)
 				}
 			}
 		}
@@ -194,6 +176,14 @@ func forceFlush(writer *bufio.Writer) {
 	if nil != err {
 		log.Println("Failed to flush the writer: ", err)
 	}
+}
+
+// Called if there was an error: will write the "ROLLBACK;" SQL command, flush
+// the writer, and log the error.
+func rollbackFlushLog(writer *bufio.Writer, format string, v ...any) {
+	rollback(writer)
+	forceFlush(writer)
+	log.Fatalf(format, v...)
 }
 
 // Escape specific characters from the statement before passing it to the SQL
