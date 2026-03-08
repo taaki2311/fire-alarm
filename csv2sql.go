@@ -76,114 +76,74 @@ import (
 // is done to simplify the program with a "flow-through" design that works well
 // with UNIX pipes.
 func main() {
-	// Creates a writer to Standard Out and writes "BEGIN;" to start a SQL
-	// transaction: https://www.geeksforgeeks.org/sql/sql-transactions/
+	reader := csv.NewReader(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
-	_, err := fmt.Fprintln(writer, "BEGIN;")
-	if nil != err {
-		rollbackFlushLog(writer, "Failed to write 'BEGIN;': %v", err)
+	defer writer.Flush()
+
+	if _, err := fmt.Fprintln(writer, "BEGIN;"); nil != err {
+		log.Fatalln("Failed to begin SQL transaction: ", err)
 	}
 
-	// Creates the CSV reader from Standard In and reads in the header.
-	reader := csv.NewReader(os.Stdin)
+	err := Run(reader, writer)
+	if nil == err {
+		_, err = fmt.Fprintln(writer, "COMMIT;")
+	} else {
+		log.Println(err)
+		_, err = fmt.Fprintln(writer, "ROLLBACK;")
+	}
+
+	if nil != err {
+		log.Fatalln("Failed to write SQL transaction terminator: ", err)
+	}
+}
+
+func Run(reader *csv.Reader, writer io.Writer) error {
 	header, err := reader.Read()
 	if nil != err {
-		rollbackFlushLog(writer, "Failed to read CSV header: %v", err)
+		return fmt.Errorf("Failed to read CSV header: %w", err)
 	}
 
-	// Check to make sure there is at least one rail line in the network.
-	// This means that the header should have at least 2 columns since
-	// the first column is the station name (does not need to have a title).
-	recordLen := len(header)
-	if 2 > recordLen {
-		rollbackFlushLog(writer, "Network must have at least one rail line")
+	// The header should have at least 2 columns since the first column is the station name (does not need to have a title).
+	if recordLen := len(header); 2 > recordLen {
+		return fmt.Errorf("Network must have at least one rail line")
 	}
 
-	// Creates the records for each rail line. Starts primary id at 1
 	for lineId, lineName := range header[1:] {
-		// Check if line name is empty
-		nameLen := len(lineName)
-		if 0 >= nameLen {
-			rollbackFlushLog(writer, "Invalid name length for line %d: %d", lineId, nameLen)
+		if nameLen := len(lineName); 0 >= nameLen {
+			return fmt.Errorf("Invalid name length for line %d: %d", lineId, nameLen)
 		}
 
-		_, err = fmt.Fprintf(writer, "INSERT INTO RailLine VALUES (%d, '%s');\n", lineId+1, escapeSql(lineName))
-		if nil != err {
-			rollbackFlushLog(writer, "Failed to write line insert statement: %v", err)
+		if _, err = fmt.Fprintf(writer, "INSERT INTO RailLine VALUES (%d, '%s');\n", lineId+1, escapeSql(lineName)); nil != err {
+			return fmt.Errorf("Failed to write line insert statement: %w", err)
 		}
 	}
 
-	stationId := 1 // Index for the station's primary key starts at 1
-	// Keep looping and reading from the CSV from Standard In until you get a EOF
+	stationId := 1
 	for record, err := reader.Read(); err != io.EOF; record, err = reader.Read() {
 		if nil != err {
-			rollbackFlushLog(writer, "Failed to read record for station %d: %v", stationId, err)
+			return fmt.Errorf("Failed to read record for station %d: %w", stationId, err)
 		}
 
-		// Check if station name is empty
-		nameLen := len(record[0])
-		if 0 >= nameLen {
-			rollbackFlushLog(writer, "Invalid name length for station %d: %d", stationId, nameLen)
+		if nameLen := len(record[0]); 0 >= nameLen {
+			return fmt.Errorf("Invalid name length for station %d: %d", stationId, nameLen)
 		}
 
-		// Create the record for each station.
-		_, err = fmt.Fprintf(writer, "INSERT INTO Station VALUES (%d, '%s');\n", stationId, escapeSql(record[0]))
-		if nil != err {
-			rollbackFlushLog(writer, "Failed to write station insert statement: %v", err)
+		if _, err = fmt.Fprintf(writer, "INSERT INTO Station VALUES (%d, '%s');\n", stationId, escapeSql(record[0])); nil != err {
+			return fmt.Errorf("Failed to write station insert statement: %w", err)
 		}
 
-		for lineId, onLine := range record[1:] { // For every line...
-			isOnLine, err := strconv.ParseBool(onLine) // check if the station in on it (has 'true' in the column)
-			if nil != err {
-				rollback(writer)
-				forceFlush(writer)
-				log.Fatalf("Failed to parse boolean value for %s, line %s: %v", record[0], header[lineId+1], err)
+		for lineId, onLine := range record[1:] {
+			if isOnLine, err := strconv.ParseBool(onLine); nil != err {
+				return fmt.Errorf("Failed to parse boolean value for %s, line %s: %w", record[0], header[lineId+1], err)
 			} else if isOnLine {
-				// Create a link between the station and the line
-				_, err = fmt.Fprintf(writer, "INSERT INTO LineStation VALUES (%d, %d);\n", lineId+1, stationId)
-				if nil != err {
-					rollbackFlushLog(writer, "Failed to write link statement: %v", err)
+				if _, err = fmt.Fprintf(writer, "INSERT INTO LineStation VALUES (%d, %d);\n", lineId+1, stationId); nil != err {
+					return fmt.Errorf("Failed to write link statement: %w", err)
 				}
 			}
 		}
 		stationId++
 	}
-	// Terminates the SQL transaction with "COMMIT;"
-	_, err = fmt.Fprintln(writer, "COMMIT;")
-	if nil != err {
-		rollback(writer)
-		forceFlush(writer)
-		log.Fatal("Failed to write 'COMMIT;': ", err)
-	}
-	forceFlush(writer)
-}
-
-// Called in case there was an error. Will issue a ROLLBACK to the SQL
-// transaction to prevent it from executing. If there was an error doing so it
-// will log it to Standard Error but otherwise continue.
-func rollback(writer io.Writer) {
-	_, err := fmt.Fprintln(writer, "ROLLBACK;")
-	if nil != err {
-		log.Println("Failed to write 'ROLLBACK;': ", err)
-	}
-}
-
-// Called in case there was an error. Will forcibly flush the writer
-// (particularly the "ROLLBACK;") will to written to Standard Out. If there was
-// an error doing so it will log it to Standard Error but otherwise continue.
-func forceFlush(writer *bufio.Writer) {
-	err := writer.Flush()
-	if nil != err {
-		log.Println("Failed to flush the writer: ", err)
-	}
-}
-
-// Called if there was an error: will write the "ROLLBACK;" SQL command, flush
-// the writer, and log the error.
-func rollbackFlushLog(writer *bufio.Writer, format string, v ...any) {
-	rollback(writer)
-	forceFlush(writer)
-	log.Fatalf(format, v...)
+	return nil
 }
 
 // Escape specific characters from the statement before passing it to the SQL
