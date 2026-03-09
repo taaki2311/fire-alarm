@@ -1,9 +1,8 @@
 /*
 Csv2sql converts station information (name and any rail lines it is on) to SQL
 statements. Emitted SQL statements are designed to work with the tables defined
-in setup.sql. Besides the table definitions, the database should be empty
-(have no records in each table) since the emitted statements start indexing the
-primary keys at '1'. For an example input see wmata.csv.
+in setup.sql. The database should be empty (have no records in each table)
+since the emitted statements start indexing the primary keys at '1'.
 
 # WARNING! SQL INJECTION POSSIBILITY!
 
@@ -17,27 +16,35 @@ BEEN WARNED!
 
 # Usage
 
-	csv2sql < input.csv > output.sql
+	csv2sql -lines lines.csv -stations stations.csv > output.sql
 
 # Example
 
-	Input
-		,Red,Green,Blue
-		Foo,0,f,false
-		Bar,1,F,True
-		Baz,FALSE,t,False
+	Input (lines.csv)
+		Red,255,0,0
+		Green,0,255,0
+		Blue,0,0,255
+
+	Input (stations.csv)
+		Foo,true,false,false
+		Bar,true,true,false
+		Baz,false,true,true
 
 	Output
 		BEGIN;
-		INSERT INTO RailLine VALUES (1, 'Red');
-		INSERT INTO RailLine VALUES (2, 'Green');
-		INSERT INTO RailLine VALUES (3, 'Blue');
-		INSERT INTO Station VALUES (1, 'Foo');
-		INSERT INTO Station VALUES (2, 'Bar');
-		INSERT INTO LineStation VALUES (1, 2);
-		INSERT INTO LineStation VALUES (3, 2);
-		INSERT INTO Station VALUES (3, 'Baz');
-		INSERT INTO LineStation VALUES (2, 3);
+		INSERT INTO RailLines VALUES (1, 'Red', 255, 0, 0);
+		INSERT INTO RailLines VALUES (2, 'Green', 0, 255, 0);
+		INSERT INTO RailLines VALUES (3, 'Blue', 0, 0, 255);
+		COMMIT;
+		BEGIN;
+		INSERT INTO Stations VALUES (1, 'Foo');
+		INSERT INTO LineStations VALUES (1, 1);
+		INSERT INTO Stations VALUES (2, 'Bar');
+		INSERT INTO LineStations VALUES (1, 2);
+		INSERT INTO LineStations VALUES (2, 2);
+		INSERT INTO Stations VALUES (3, 'Baz');
+		INSERT INTO LineStations VALUES (2, 3);
+		INSERT INTO LineStations VALUES (3, 3);
 		COMMIT;
 
 # CSV Format
@@ -63,6 +70,7 @@ package main
 import (
 	"bufio"
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -71,32 +79,26 @@ import (
 	"strings"
 )
 
-// CSV is read in from Standard In (the actual file contents, not just the
-// filepath) and the generated SQL statements are printed to Standard Out. This
-// is done to simplify the program with a "flow-through" design that works well
-// with UNIX pipes.
+// Reads rail line and station data from CSV files specified via command-line flags
+// and generates SQL INSERT statements. Output is written to Standard Out.
 func main() {
+	linesPath := flag.String("lines", "lines.csv", "CSV file for the rail lines")
+	stationsPath := flag.String("stations", "stations.csv", "CVS file for the stations")
+	flag.Parse()
+
 	writer := bufio.NewWriter(os.Stdout)
-	defer writer.Flush()
+	defer func(writer *bufio.Writer) {
+		if err := writer.Flush(); nil != err {
+			log.Panicln("Failed to flush writer:", err)
+		}
+	}(writer)
 
-	linesFile, err := os.Open("lines.csv")
-	if nil != err {
-		log.Panicln("Failed to open lines CSV: ", err)
-	}
-	defer linesFile.Close()
-
-	if err := preformTransactions(lineStatements, csv.NewReader(linesFile), writer); nil != err {
-		log.Panicln("Failed to wrap line statements in a transaction: ", err)
+	if err := execFromCsvFile(*linesPath, lineStatements, writer); nil != err {
+		log.Panicln("Failed to generate rail line SQL statements:", err)
 	}
 
-	stationsFile, err := os.Open("stations.csv")
-	if nil != err {
-		log.Panicln("Failed to open lines CSV: ", err)
-	}
-	defer stationsFile.Close()
-
-	if err := preformTransactions(stationStatements, csv.NewReader(stationsFile), writer); nil != err {
-		log.Panicln("Failed to wrap line statements in a transaction: ", err)
+	if err := execFromCsvFile(*stationsPath, stationStatements, writer); nil != err {
+		log.Panicln("Failed to generate station SQL statements:", err)
 	}
 }
 
@@ -201,13 +203,16 @@ func parseUint8(s string) (uint8, error) {
 	return uint8(number), err
 }
 
+// Function prototype for generating SQL statements from a CSV.
+type csv2sqlStatements func(*csv.Reader, io.Writer) error
+
 // Wraps the SQL statements generator functions in a SQL transaction and logs any error from them.
-func preformTransactions(transactions func(*csv.Reader, io.Writer) error, reader *csv.Reader, writer io.Writer) error {
+func preformTransaction(statements csv2sqlStatements, reader *csv.Reader, writer io.Writer) error {
 	if _, err := fmt.Fprintln(writer, "BEGIN;"); nil != err {
 		return fmt.Errorf("Failed to begin SQL transaction: %w", err)
 	}
 
-	err := transactions(reader, writer)
+	err := statements(reader, writer)
 	if nil == err {
 		_, err = fmt.Fprintln(writer, "COMMIT;")
 	} else {
@@ -217,6 +222,21 @@ func preformTransactions(transactions func(*csv.Reader, io.Writer) error, reader
 
 	if nil != err {
 		return fmt.Errorf("Failed to end SQL transaction: %w", err)
+	}
+	return nil
+}
+
+// Manages file operations for [preformTransaction].
+func execFromCsvFile(path string, statements csv2sqlStatements, writer io.Writer) error {
+	file, err := os.Open(path)
+	if nil != err {
+		return fmt.Errorf("Failed to open %s: %w", path, err)
+	}
+	if err := preformTransaction(statements, csv.NewReader(file), writer); nil != err {
+		return fmt.Errorf("Failed to wrap SQL statements in a transaction: %w", err)
+	}
+	if err := file.Close(); nil != err {
+		return fmt.Errorf("Failed to close %s: %w", path, err)
 	}
 	return nil
 }
