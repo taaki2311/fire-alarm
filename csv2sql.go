@@ -76,28 +76,73 @@ import (
 // is done to simplify the program with a "flow-through" design that works well
 // with UNIX pipes.
 func main() {
-	reader := csv.NewReader(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
 	defer writer.Flush()
 
-	if _, err := fmt.Fprintln(writer, "BEGIN;"); nil != err {
-		log.Fatalln("Failed to begin SQL transaction: ", err)
-	}
-
-	err := Run(reader, writer)
-	if nil == err {
-		_, err = fmt.Fprintln(writer, "COMMIT;")
-	} else {
-		log.Println(err)
-		_, err = fmt.Fprintln(writer, "ROLLBACK;")
-	}
-
+	linesFile, err := os.Open("lines.csv")
 	if nil != err {
-		log.Fatalln("Failed to write SQL transaction terminator: ", err)
+		log.Panicln("Failed to open lines CSV: ", err)
+	}
+	defer linesFile.Close()
+
+	if err := preformTransactions(lineStatements, csv.NewReader(linesFile), writer); nil != err {
+		log.Panicln("Failed to wrap line statements in a transaction: ", err)
+	}
+
+	stationsFile, err := os.Open("stations.csv")
+	if nil != err {
+		log.Panicln("Failed to open lines CSV: ", err)
+	}
+	defer stationsFile.Close()
+
+	if err := preformTransactions(stationStatements, csv.NewReader(stationsFile), writer); nil != err {
+		log.Panicln("Failed to wrap line statements in a transaction: ", err)
 	}
 }
 
-func Run(reader *csv.Reader, writer io.Writer) error {
+// Generate the SQL statements for populating the 'RailLines' table.
+func lineStatements(reader *csv.Reader, writer io.Writer) error {
+	header, err := reader.Read()
+	if nil != err {
+		return fmt.Errorf("Failed to read CSV header: %w", err)
+	}
+
+	if recordLen := len(header); 4 > recordLen {
+		return fmt.Errorf(
+			"Invalid number of columns: Expected at least 4 (Station Name, Red, Green, and Blue), Got %d", recordLen)
+	}
+
+	lineId := 1
+	for record, err := reader.Read(); err != io.EOF; record, err = reader.Read() {
+		if nil != err {
+			return fmt.Errorf("Failed to read record for line %d: %w", lineId, err)
+		}
+
+		lineName := record[0]
+		red, err := parseUint8(record[1])
+		if nil != err {
+			return fmt.Errorf("Failed to parse red value for %s: %w", lineName, err)
+		}
+		green, err := parseUint8(record[2])
+		if nil != err {
+			return fmt.Errorf("Failed to parse green value for %s: %w", lineName, err)
+		}
+		blue, err := parseUint8(record[3])
+		if nil != err {
+			return fmt.Errorf("Failed to parse blue value for %s: %w", lineName, err)
+		}
+
+		if _, err = fmt.Fprintf(writer, "INSERT INTO RailLines VALUES (%d, '%s', %d, %d, %d);\n",
+			lineId, escapeSql(lineName), red, green, blue); nil != err {
+			return fmt.Errorf("Failed to write line insert statement: %w", err)
+		}
+		lineId++
+	}
+	return nil
+}
+
+// Generate the SQL statements for populating the 'Stations' table.
+func stationStatements(reader *csv.Reader, writer io.Writer) error {
 	header, err := reader.Read()
 	if nil != err {
 		return fmt.Errorf("Failed to read CSV header: %w", err)
@@ -106,16 +151,6 @@ func Run(reader *csv.Reader, writer io.Writer) error {
 	// The header should have at least 2 columns since the first column is the station name (does not need to have a title).
 	if recordLen := len(header); 2 > recordLen {
 		return fmt.Errorf("Network must have at least one rail line")
-	}
-
-	for lineId, lineName := range header[1:] {
-		if nameLen := len(lineName); 0 >= nameLen {
-			return fmt.Errorf("Invalid name length for line %d: %d", lineId, nameLen)
-		}
-
-		if _, err = fmt.Fprintf(writer, "INSERT INTO RailLine VALUES (%d, '%s');\n", lineId+1, escapeSql(lineName)); nil != err {
-			return fmt.Errorf("Failed to write line insert statement: %w", err)
-		}
 	}
 
 	stationId := 1
@@ -128,7 +163,7 @@ func Run(reader *csv.Reader, writer io.Writer) error {
 			return fmt.Errorf("Invalid name length for station %d: %d", stationId, nameLen)
 		}
 
-		if _, err = fmt.Fprintf(writer, "INSERT INTO Station VALUES (%d, '%s');\n", stationId, escapeSql(record[0])); nil != err {
+		if _, err = fmt.Fprintf(writer, "INSERT INTO Stations VALUES (%d, '%s');\n", stationId, escapeSql(record[0])); nil != err {
 			return fmt.Errorf("Failed to write station insert statement: %w", err)
 		}
 
@@ -136,7 +171,7 @@ func Run(reader *csv.Reader, writer io.Writer) error {
 			if isOnLine, err := strconv.ParseBool(onLine); nil != err {
 				return fmt.Errorf("Failed to parse boolean value for %s, line %s: %w", record[0], header[lineId+1], err)
 			} else if isOnLine {
-				if _, err = fmt.Fprintf(writer, "INSERT INTO LineStation VALUES (%d, %d);\n", lineId+1, stationId); nil != err {
+				if _, err = fmt.Fprintf(writer, "INSERT INTO LineStations VALUES (%d, %d);\n", lineId+1, stationId); nil != err {
 					return fmt.Errorf("Failed to write link statement: %w", err)
 				}
 			}
@@ -158,4 +193,30 @@ func escapeSql(statement string) string {
 		statement = strings.ReplaceAll(statement, stringReplacement[0], stringReplacement[1])
 	}
 	return statement
+}
+
+// Converts decimal string of a number to a unsigned byte.
+func parseUint8(s string) (uint8, error) {
+	number, err := strconv.ParseUint(s, 10, 8)
+	return uint8(number), err
+}
+
+// Wraps the SQL statements generator functions in a SQL transaction and logs any error from them.
+func preformTransactions(transactions func(*csv.Reader, io.Writer) error, reader *csv.Reader, writer io.Writer) error {
+	if _, err := fmt.Fprintln(writer, "BEGIN;"); nil != err {
+		return fmt.Errorf("Failed to begin SQL transaction: %w", err)
+	}
+
+	err := transactions(reader, writer)
+	if nil == err {
+		_, err = fmt.Fprintln(writer, "COMMIT;")
+	} else {
+		log.Println(err)
+		_, err = fmt.Fprintln(writer, "ROLLBACK;")
+	}
+
+	if nil != err {
+		return fmt.Errorf("Failed to end SQL transaction: %w", err)
+	}
+	return nil
 }
