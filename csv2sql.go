@@ -34,9 +34,9 @@ BEEN WARNED!
 
 	Output
 		BEGIN;
-		INSERT INTO RailLines VALUES (1, 'Red', 255, 0, 0);
-		INSERT INTO RailLines VALUES (2, 'Green', 0, 255, 0);
-		INSERT INTO RailLines VALUES (3, 'Blue', 0, 0, 255);
+		INSERT INTO RailLines VALUES (1, 'Ruby', 255, 0, 0);
+		INSERT INTO RailLines VALUES (2, 'Emerald', 0, 255, 0);
+		INSERT INTO RailLines VALUES (3, 'Sapphire', 0, 0, 255);
 		COMMIT;
 		BEGIN;
 		INSERT INTO Stations VALUES (1, 'Foo');
