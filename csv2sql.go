@@ -28,9 +28,9 @@ BEEN WARNED!
 
 	Input (stations.csv)
 		Station,Ruby,Emerald,Sapphire
-		Foo,true,false,false
-		Bar,true,true,false
-		Baz,false,true,true
+		Foo,1,0,f
+		Bar,t,T,F
+		Baz,false,true,True
 
 	Output
 		BEGIN;
@@ -139,7 +139,7 @@ func lineStatements(reader *csv.Reader, writer io.Writer) error {
 	}
 
 	lineId := 1
-	for record, err := reader.Read(); err != io.EOF; record, err = reader.Read() {
+	for record, err := reader.Read(); io.EOF != err; record, err = reader.Read() {
 		if nil != err {
 			return fmt.Errorf("Failed to read record for line %d: %w", lineId, err)
 		}
@@ -186,7 +186,7 @@ func stationStatements(reader *csv.Reader, writer io.Writer) error {
 	reader.FieldsPerRecord = headerNumFields
 
 	stationId := 1
-	for record, err := reader.Read(); err != io.EOF; record, err = reader.Read() {
+	for record, err := reader.Read(); io.EOF != err; record, err = reader.Read() {
 		if nil != err {
 			return fmt.Errorf("Failed to read record for station %d: %w", stationId, err)
 		}
@@ -215,7 +215,7 @@ func stationStatements(reader *csv.Reader, writer io.Writer) error {
 }
 
 // Escape specific characters from the statement before passing it to the SQL string.
-// Currently only "NULL -> <empty>" and "<single quote> -> <single quote><single quote>"
+// Currently only "NUL -> <empty>" and "<single quote> -> <single quote><single quote>"
 // are the only pairs but more can be added by appending them to the argument for
 // [strings.NewReplacer].
 func escapeSqlString(statement string) string {
@@ -226,6 +226,23 @@ func escapeSqlString(statement string) string {
 func parseUint8(s string) (uint8, error) {
 	number, err := strconv.ParseUint(strings.TrimSpace(s), 10, 8)
 	return uint8(number), err
+}
+
+// Manages file operations for [performTransaction].
+func execFromCsvFile(path string, statements csv2sqlStatements, writer io.Writer) error {
+	file, err := os.Open(path)
+	if nil != err {
+		return fmt.Errorf("Failed to open %s: %w", path, err)
+	}
+	defer func(file *os.File, path string) {
+		if err := file.Close(); nil != err {
+			log.Printf("Failed to close %s: %v\n", path, err)
+		}
+	}(file, path)
+
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+	return performTransaction(statements, reader, writer)
 }
 
 // Function prototype for generating SQL statements from a CSV.
@@ -247,21 +264,4 @@ func performTransaction(statements csv2sqlStatements, reader *csv.Reader, writer
 		return fmt.Errorf("Failed to end SQL transaction: %w", err)
 	}
 	return err
-}
-
-// Manages file operations for [performTransaction].
-func execFromCsvFile(path string, statements csv2sqlStatements, writer io.Writer) error {
-	file, err := os.Open(path)
-	if nil != err {
-		return fmt.Errorf("Failed to open %s: %w", path, err)
-	}
-	defer func(file *os.File, path string) {
-		if err := file.Close(); nil != err {
-			log.Printf("Failed to close %s: %v\n", path, err)
-		}
-	}(file, path)
-
-	reader := csv.NewReader(file)
-	reader.TrimLeadingSpace = true
-	return performTransaction(statements, reader, writer)
 }
