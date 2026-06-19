@@ -1,0 +1,43 @@
+services:
+  db-init:
+    build:
+      args:
+        - TRANSIT_SYSTEM=wmata
+    volumes:
+      - database:/home/data:rw
+
+  service:
+    build: service
+    entrypoint: ["cp", "timestamp.txt", "state/"]
+    environment:
+      - DATABASE=sqlite://data/db.sqlite?mode=ro
+      - TIMESTAMP=state/timestamp.txt
+      - RUST_BACKTRACE=1
+    env_file:
+      - service/.env.keys
+    volumes:
+      - database:/home/data:ro
+      - state:/home/state:rw
+    depends_on:
+      - db-init
+
+  website:
+    build: website
+    environment:
+      - DATABASE=sqlite://data/db.sqlite
+      - URL=0.0.0.0:8080
+      - RUST_BACKTRACE=1
+    env_file:
+      - website/.env.keys
+    volumes:
+      - database:/home/data:rw
+    ports:
+      - "127.0.0.1:8080:8080/TCP"
+    depends_on:
+      - db-init
+
+volumes:
+  database:
+    name: "Fire-Alarm-WMATA-SQLite"
+  state:
+    name: "Service-Timestamp"
