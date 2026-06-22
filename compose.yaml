@@ -8,7 +8,7 @@ services:
 
   service:
     build: service
-    entrypoint: ["cp", "timestamp.txt", "state/"]
+    entrypoint: ["sh", "/home/entrypoint.sh"]
     environment:
       - DATABASE=sqlite://data/db.sqlite?mode=ro
       - TIMESTAMP=state/timestamp.txt
@@ -20,6 +20,18 @@ services:
       - state:/home/state:rw
     depends_on:
       - db-init
+    labels:
+      ofelia.enabled: true
+      ofelia.job-exec.wmata.schedule: "@every 15m"
+      ofelia.job-exec.wmata.command: "dotenvx run -- wmata"
+
+  ofelia:
+    image: mcuadros/ofelia:0.4.0-beta.5
+    depends_on:
+      - service
+    command: daemon --docker --docker-filter=label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   website:
     build: website
