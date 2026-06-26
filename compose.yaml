@@ -13,8 +13,6 @@ services:
       - DATABASE=sqlite://data/db.sqlite?mode=ro
       - TIMESTAMP=state/timestamp.txt
       - RUST_BACKTRACE=1
-    env_file:
-      - service/.env.keys
     volumes:
       - database:/home/data:ro
       - state:/home/state:rw
@@ -23,13 +21,20 @@ services:
     labels:
       ofelia.enabled: true
       ofelia.job-exec.wmata.schedule: "@every 15m"
-      ofelia.job-exec.wmata.command: "dotenvx run -- wmata"
+      ofelia.job-exec.wmata.command: "dotenvx run --env-file=/home/.env.prod --env-keys-file=/run/secrets/service_key -- wmata"
+    secrets:
+      - service_key
 
   ofelia:
     image: mcuadros/ofelia:0.4.0-beta.5
     depends_on:
       - service
-    command: daemon --docker --docker-filter=label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}
+    command:
+      [
+        "daemon",
+        "--docker",
+        "--docker-filter=label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}",
+      ]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
@@ -39,17 +44,32 @@ services:
       - DATABASE=sqlite://data/db.sqlite
       - URL=0.0.0.0:8080
       - RUST_BACKTRACE=1
-    env_file:
-      - website/.env.keys
     volumes:
       - database:/home/data:rw
     ports:
       - "127.0.0.1:8080:8080/TCP"
     depends_on:
       - db-init
+    secrets:
+      - website_key
+    entrypoint:
+      [
+        "dotenvx",
+        "run",
+        "--env-file=/home/.env.prod",
+        "--env-keys-file=/run/secrets/website_key",
+        "--",
+      ]
+    command: ["fire-alarm-website"]
 
 volumes:
   database:
     name: "Fire-Alarm-WMATA-SQLite"
   state:
     name: "Service-Timestamp"
+
+secrets:
+  service_key:
+    file: service/.env.keys
+  website_key:
+    file: website/.env.keys
