@@ -1,75 +1,115 @@
+configs:
+  caddy-file:
+    file: ./Caddyfile
+
+networks:
+  backend:
+  frontend:
+
+secrets:
+  service-key:
+    file: service/.env.keys
+  website-key:
+    file: website/.env.keys
+
 services:
   db-init:
     build:
       args:
         - TRANSIT_SYSTEM=wmata
+    networks:
+      - backend
     volumes:
-      - database:/home/data:rw
+      - database:/home/data
 
-  service:
-    build: service
-    entrypoint: ["sh", "/home/entrypoint.sh"]
-    environment:
-      - DATABASE=sqlite://data/db.sqlite?mode=ro
-      - TIMESTAMP=state/timestamp.txt
-      - RUST_BACKTRACE=1
-    volumes:
-      - database:/home/data:ro
-      - state:/home/state:rw
-    depends_on:
-      - db-init
-    labels:
-      ofelia.enabled: true
-      ofelia.job-exec.wmata.schedule: "@every 15m"
-      ofelia.job-exec.wmata.command: "dotenvx run --env-file=/home/.env.prod --env-keys-file=/run/secrets/service_key -- wmata"
-    secrets:
-      - service_key
-
-  ofelia:
-    image: mcuadros/ofelia:0.4.0-beta.5
-    depends_on:
-      - service
+  cron:
     command:
       [
         "daemon",
         "--docker",
         "--docker-filter=label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}",
       ]
+    image: mcuadros/ofelia:0.3.22
+    networks:
+      - backend
+    restart: unless-stopped
+    depends_on:
+      - service
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
-  website:
-    build: website
+  reverse-proxy:
+    configs:
+      - source: caddy-file
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      - website
     environment:
-      - DATABASE=sqlite://data/db.sqlite
-      - URL=0.0.0.0:8080
-      - RUST_BACKTRACE=1
-    volumes:
-      - database:/home/data:rw
+      - ACME_CA=${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+      - DOMAIN=${DOMAIN:-localhost}
+    image: caddy:2.11.4
+    networks:
+      - frontend
     ports:
-      - "127.0.0.1:8080:8080/TCP"
+      - "80:80"
+      - "443:443"
+      - "433:433/UDP"
+    restart: unless-stopped
+    volumes:
+      - caddy-config:/config
+      - caddy-data:/data
+
+  service:
+    build: service
     depends_on:
       - db-init
+    entrypoint: ["sh", "/home/entrypoint.sh"]
+    environment:
+      - DATABASE=sqlite://data/db.sqlite?mode=ro
+      - RUST_BACKTRACE=1
+      - TIMESTAMP=state/timestamp.txt
+    labels:
+      ofelia.enabled: true
+      ofelia.job-exec.wmata.command: "dotenvx run --env-file=/home/.env.prod --env-keys-file=/run/secrets/service-key -- wmata"
+      ofelia.job-exec.wmata.schedule: "@every 15m"
+    networks:
+      - backend
     secrets:
-      - website_key
+      - service-key
+    volumes:
+      - database:/home/data:ro
+      - service-timestamp:/home/state
+
+  website:
+    build: website
+    command: ["fire-alarm-website"]
+    depends_on:
+      - db-init
     entrypoint:
       [
         "dotenvx",
         "run",
         "--env-file=/home/.env.prod",
-        "--env-keys-file=/run/secrets/website_key",
+        "--env-keys-file=/run/secrets/website-key",
         "--",
       ]
-    command: ["fire-alarm-website"]
+    environment:
+      - DATABASE=sqlite://data/db.sqlite
+      - RUST_BACKTRACE=1
+      - URL=0.0.0.0:8080
+    expose:
+      - 8080
+    networks:
+      - backend
+      - frontend
+    restart: unless-stopped
+    secrets:
+      - website-key
+    volumes:
+      - database:/home/data
 
 volumes:
+  caddy-config:
+  caddy-data:
   database:
-    name: "Fire-Alarm-WMATA-SQLite"
-  state:
-    name: "Service-Timestamp"
-
-secrets:
-  service_key:
-    file: service/.env.keys
-  website_key:
-    file: website/.env.keys
+  service-timestamp:

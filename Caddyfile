@@ -1,0 +1,7 @@
+{
+	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+}
+
+{$DOMAIN:localhost} {
+	reverse_proxy website:8080
+}
