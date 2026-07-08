@@ -63,7 +63,7 @@ services:
     build: service
     depends_on:
       - db-init
-    entrypoint: ["sh", "/home/entrypoint.sh"]
+    entrypoint: ["sleep", "infinity"]
     environment:
       - DATABASE=sqlite://data/db.sqlite?mode=ro
       - RUST_BACKTRACE=1
