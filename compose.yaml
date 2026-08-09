@@ -1,14 +1,15 @@
 configs:
   caddy-file:
     file: ./Caddyfile
+  ofelia-conf:
+    file: ./ofelia.conf
 
 networks:
   backend:
+    internal: true
   frontend:
 
 secrets:
-  service-key:
-    file: service/.env.keys
   website-key:
     file: website/.env.keys
 
@@ -17,24 +18,20 @@ services:
     build:
       args:
         - TRANSIT_SYSTEM=wmata
-    networks:
-      - backend
+    network_mode: none
     volumes:
       - database:/home/data
 
   cron:
-    command:
-      [
-        "daemon",
-        "--docker",
-        "--docker-filter=label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}",
-      ]
-    image: mcuadros/ofelia:0.3.22
-    networks:
-      - backend
-    restart: unless-stopped
+    command: ["daemon"]
+    configs:
+      - source: ofelia-conf
+        target: /etc/ofelia.conf
     depends_on:
-      - service
+      - db-init
+    image: mcuadros/ofelia:0.4.0-beta.5
+    network_mode: none
+    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
@@ -49,6 +46,7 @@ services:
       - DOMAIN=${DOMAIN:-localhost}
     image: caddy:2.11.4
     networks:
+      - backend
       - frontend
     ports:
       - "80:80"
@@ -59,27 +57,6 @@ services:
       - caddy-config:/config
       - caddy-data:/data
 
-  service:
-    build: service
-    depends_on:
-      - db-init
-    entrypoint: ["sleep", "infinity"]
-    environment:
-      - DATABASE=sqlite://data/db.sqlite?mode=ro
-      - RUST_BACKTRACE=1
-      - TIMESTAMP=state/timestamp.txt
-    labels:
-      ofelia.enabled: true
-      ofelia.job-exec.wmata.command: "dotenvx run --env-file=/home/.env.prod --env-keys-file=/run/secrets/service-key -- wmata"
-      ofelia.job-exec.wmata.schedule: "@every 15m"
-    networks:
-      - backend
-    secrets:
-      - service-key
-    volumes:
-      - database:/home/data:ro
-      - service-timestamp:/home/state
-
   website:
     build: website
     command: ["fire-alarm-website"]
@@ -89,19 +66,17 @@ services:
       [
         "dotenvx",
         "run",
-        "--env-file=/home/.env.prod",
+        "--env-file=.env.prod",
         "--env-keys-file=/run/secrets/website-key",
         "--",
       ]
     environment:
       - DATABASE=sqlite://data/db.sqlite
-      - RUST_BACKTRACE=1
       - URL=0.0.0.0:8080
     expose:
       - 8080
     networks:
       - backend
-      - frontend
     restart: unless-stopped
     secrets:
       - website-key
