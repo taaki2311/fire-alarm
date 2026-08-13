@@ -10,6 +10,8 @@ networks:
   frontend:
 
 secrets:
+  service-key:
+    file: service/.env.keys
   website-key:
     file: website/.env.keys
 
@@ -23,13 +25,15 @@ services:
       - database:/home/data
 
   cron:
-    command: ["daemon"]
-    configs:
-      - source: ofelia-conf
-        target: /etc/ofelia.conf
+    command:
+      [
+        "daemon",
+        "--docker",
+        "--docker-filter=label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}",
+      ]
     depends_on:
-      - db-init
-    image: mcuadros/ofelia:0.4.0-beta.5
+      - service
+    image: mcuadros/ofelia:0.3
     network_mode: none
     restart: unless-stopped
     volumes:
@@ -56,6 +60,26 @@ services:
     volumes:
       - caddy-config:/config
       - caddy-data:/data
+
+  service:
+    build: service
+    depends_on:
+      - db-init
+    entrypoint: ["sleep", "infinity"]
+    environment:
+      - DATABASE=sqlite://data/db.sqlite?mode=ro
+      - TIMESTAMP=state/timestamp.txt
+    labels:
+      ofelia.enabled: true
+      ofelia.job-exec.wmata.command: "dotenvx run --env-file=.env.prod --env-keys-file=/run/secrets/service-key -- wmata"
+      ofelia.job-exec.wmata.schedule: "@every 15m"
+    networks:
+      - frontend
+    secrets:
+      - service-key
+    volumes:
+      - database:/home/data:ro
+      - service-timestamp:/home/state
 
   website:
     build: website
