@@ -1,8 +1,6 @@
 configs:
   caddy-file:
     file: ./Caddyfile
-  ofelia-conf:
-    file: ./ofelia.conf
 
 networks:
   backend:
@@ -48,7 +46,7 @@ services:
     environment:
       - ACME_CA=${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
       - DOMAIN=${DOMAIN:-localhost}
-    image: caddy:2.11.4
+    image: caddy:2.11
     networks:
       - backend
       - frontend
